@@ -9,7 +9,7 @@ As Dapp Developers, minimizing the gas spent on execution is more important in o
 
 First, I had to discover which operations in Solidity used the most gas. This would help me narrow down the data structures and operations that would help us reduce the most amount of gas possible.
 
-Reading the Ethereum Yellowpaper, Overview of Gas Costs, and Ethereum Beigepaper helped determine the most costly operations in Solidity. The Yellowpaper is the official technical specification of the language, identifying which operations are the most gas-consuming. The Beigepaper is essentially the Yellowpaper, with the technical specifications removed, and expressed in english. These resources were extremely important in helping determining the most gas costly operations, and giving us a starting point of where to begin with optimization.
+Reading the [Ethereum Yellowpaper](https://ethereum.github.io/yellowpaper/paper.pdf), [Overview of Gas Costs](https://docs.google.com/spreadsheets/d/1m89CVujrQe5LAFJ8-YAUCcNK950dUzMQPMJBxRtGCqs/edit#gid=0), and [Ethereum Beigepaper](https://github.com/chronaeon/beigepaper/blob/master/beigepaper.pdf) helped determine the most costly operations in Solidity. The Yellowpaper is the official technical specification of the language, identifying which operations are the most gas-consuming. The Beigepaper is essentially the Yellowpaper, with the technical specifications removed, and expressed in english. These resources were extremely important in helping determining the most gas costly operations, and giving us a starting point of where to begin with optimization.
 
 # Overview of STK-smart-contracts
 
@@ -21,7 +21,8 @@ Our contracts implementing the above are open-sourced at the GitHub repository l
 
 * Deploy `STKChannelLibrary` to initialize the required structs for STKChannel
 * Deploy `STKChannel`, which will handle all functionality in the payment channel
-* For a higher level understanding of how our payment rails work, check [this](https://mycardboarddreams.wordpress.com/2017/10/02/how-stk-works/) out.
+
+For a higher level understanding of how our payment rails work, check [this](https://mycardboarddreams.wordpress.com/2017/10/02/how-stk-works/) out.
 
 # Testing on Remix
 
@@ -33,7 +34,8 @@ While executing on the Javascript VM with Remix, transaction receipts make a dis
 
 * Calling constructor: 21000 units of gas
 * Deploying new contract: 32000 units of gas
-* Gas Used by Transaction vs Gas Price vs Value (on Etherscan)
+
+# Gas Used by Transaction vs Gas Price vs Value (on Etherscan)
 
 If you are executing on Remix through a testnet such as Rinkeby, Ropsten, or Kovan, then you’ll see an Etherscan of the transaction on the respective testnet. This can also be useful in terms of minimizing the gas cost.
 
@@ -48,7 +50,7 @@ However, there seems to be a bit of confusion on what the different gas-related 
 
 For a precise measurement of gas that you have used or gas you have saved, don’t use actual tx cost/fee. Use the ETH Gas Station, take the Gas Used by Txn and Gas Price; and it will give you a more precise transaction fee in ETH and in Fiat.
 
-Remember that the precise transaction fee will change, depending on the Gas Price. The Gas Price is calculated by miners, and is out of your control. Gas Used by Txn is directly related to the efficiency and computation of your code. Thus, you want to minimize this as much as possible.
+Remember that the precise transaction fee will change, depending on the Gas Price. The Gas Price standard is set by miners, depending on recent prices to get mined within a certain number of blocks. However, many wallets allow you to set it yourself. One can always use a lower than average gas price, but you run the risk of the [transaction not being picked up by miners](https://medium.com/@jgm.orinoco/releasing-stuck-ethereum-transactions-1390149f297d). Ultimately, this out of your control as a developer, thus I’ll be focusing on minimizing Gas Used by Txn instead. This is directly related to the efficiency and computation of your code. 
 
 # Determining structures that can be moved off-chain 
 
@@ -64,8 +66,8 @@ After analyzing the flow creating and closing a payment channel, I started to re
 
 Another thing that stood out was `openedBlock_;`, as it was a similar structure. It was being set at the opening (or initialization) of a channel, and was reset after settling. It became a question of whether this was necessary to be stored on the blockchain. If we want to check whether or not the channel was closed or not, it could be inferred by another variable, the closedBlock. This variable was initialized to 0 upon creation of a channel, and set to the block number at the state which the channel closed. In other words:
 
-* `if closedBlock == 0:` channel is still open
-* `if closedBlock >0:` channel is closed
+* `if closedBlock==0:` channel is still open
+* `if closedBlock>0:` channel is closed
 
 Always look for opportunities in your code to infer things about the state of your code, without having a variable to explicitly define and spell it out.
 
@@ -76,14 +78,6 @@ Always look for opportunities in your code to infer things about the state of yo
 If a global variable does not need to be changed throughout the life of the contract, think about using a constant instead. A constant variable does not increase gas costs, as it is not stored in the storage. It’s stored in the bytecode, which is a much smaller number. In terms of gas amounts, storage costs would be around 20000; whereas storage in the bytecode would be around 200.
 
 Unfortunately, this tactic was not useful in our contracts. Originally, we were thinking timeout_ could be implemented as a constant variable. However, getting rid of the timeout variable would come with very detrimental effects. We’ll go into that a bit more in the next section.
-
-# Optimization at the cost of readability
-
-Optimization done is often at the expense of readability. In other words, you pay less for execution, but your code becomes slightly less readable.
-
-Our timeout variable was used to determine whether the channel was in the contest period. It would be set when the channel is initialized, and determine the number of blocks between our closing and settling period.
-
-To change the length of the contest period, this would require changing the timeout variable. It would have been possible to deploy a new library for the different timeouts we wanted to use. For instance, for testing purposes, the timeout is often set to 2, whereas the app implementation is set to 10. Removing this variable would have saved about 20000 units of gas. However, this would be incredibly confusing if the core channel library code had changed. We would have to push multiple versions of the code onto the chain and distinguish which contract maps to which timeout length. This would lead to more confusion and increase the chance of errors, so we opted to not make this change.
 
 # The cost of hash functions
 
@@ -97,17 +91,22 @@ keccak256 (also known as sha3*, in Appendix G) | 30 gas + 6 gas/word |
 sha256 (see Appendix E, line 209) | 60 gas + 12 gas/word | 
 ripemd (see Appendix E, line 212) | 600 gas + 120 gas/word | 
 
-`*`: The sha3 function mentioned here is the Ethereum flavour of sha3 and not the universally standardized version. This is the reason for the new name adoption of keccak256 instead. In web3 documentation, this is explicit in the web3.utils.soliditySha3 library, where it specifies the same hashing algorithm as Solidity would use.
+`*`: The sha3 function mentioned here is the Ethereum flavour of sha3 and not the universally standardized version. This is the reason for the new name adoption of keccak256 instead. In web3 documentation, this is explicit in the [web3.utils.soliditySha3](https://web3js.readthedocs.io/en/1.0/web3-utils.html?highlight=sha3%20#soliditysha3) library, where it specifies the same hashing algorithm as Solidity would use.
 
 # `bytes32` vs `string`
 
 If you are using smaller string types, you can use bytes32 to store your data instead. While this does not affect our contract (we were already using byte types), using byte over string can help you save gas spent on storage.
 
-# `uint8` uses more gas than `uint256`
+# `uint8` *sometimes* uses more gas than `uint256`
 
 [Source.](https://ethereum.stackexchange.com/questions/3067/why-does-uint8-cost-more-gas-than-uint256)
 
-In solidity, 256bit/32 byte words are considered the “default” base unit. All operations are considered in these units. If your data is smaller and you choose to use uint8, you will need to spend extra gas to type cast. It will likely save you about 1500–2000 units of gas.
+In solidity, 256bit/32 byte words are considered the “default” base unit. All operations are considered in these units. In many cases, `uint8` is cheaper than `uint256`: 
+
+* If it is within a struct, reads and writes will be batched, as they are in tightly packed arguments. 
+* If said `uint8` variable is not modified often, it is much less expensive to store in 1 memory slot as opposed to multiple. 
+
+However, in some cases, `uint256` is cheaper than `uint8`. To make use of this, it would have to be tightly packed.***
 
 # Tightly Packing Arguments
 
@@ -127,6 +126,14 @@ In this example, the changes to `userAddress`, `signerAddress`,and `recipientAdd
 
 Whenever our code need to access storage variables through resetting a value or altering a value in storage, we make use of this structure. The precise amount of gas it saves would depend on your contract.
 
+# Optimization at the cost of readability
+
+Optimization done is often at the expense of readability. In other words, you pay less for execution, but your code becomes slightly less readable.
+
+Our `timeout` variable was used to determine whether the channel was in the contest period. It would be set when the channel is initialized, and determine the number of blocks between our closing and settling period.
+
+To change the length of the contest period, this would require changing the `timeout` variable. It would have been possible to deploy a new library for the different timeouts we wanted to use. For instance, for testing purposes, the timeout is often set to 2, whereas the app implementation is set to 10. Removing this variable would have saved about 20000 units of gas. However, this would be incredibly confusing if the core channel library code had changed. We would have to push multiple versions of the code onto the chain and distinguish which contract maps to which timeout length. This would lead to more confusion and increase the chance of errors, so we opted to not make this change.
+
 # Use of Libraries
 
 If your code requires instantiation of data objects or structures that are identical, you may want to use Libraries to help you more efficiently instantiate. In our code examples, we make use of `STKChannelLibrary` to instantiate `STKChannel`.
@@ -141,9 +148,9 @@ We’ve talked about a lot of different things that helped us (or helped others)
 * Use the ETH Gas Station to get a more precise ETH/Fiat amount spent on gas costs
 * Analyze your code and try to move data off-chain
 * Use global variable constants where applicable
-* If some optimization makes your code unreadable, think twice
 * `keccak256` over any other hash function
 * `bytes32` over `string`
-* `uint8` uses more gas than `uint256`
+* `uint8` sometimes uses more gas than `uint256`
 * Use tightly packed arguments
+* If some optimization makes your code unreadable, think twice
 * Use solidity libraries for code reuse
