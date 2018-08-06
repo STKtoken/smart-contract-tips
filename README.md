@@ -5,3 +5,4 @@ As part of STK's promise to the community of being transparent, we have started 
 ## Articles Thus Far 
 
 1. [Reducing Gas Costs](./ReducingGasFees.md) - tips and tricks to reducing gas fees in Solidity 
+2. [Smart Contract State Channel Security](./StateChannelSecurity.md) - a sweet and short explanation of the security and safety of state channel smart contracts. 
